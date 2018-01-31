@@ -24,6 +24,49 @@ struct sockaddr_in address;
 std::map <std::string, std::string> pseudoList;
 int server_fd;
 
+//Save a string to a txt file
+void saveRoomText(int roomNum){
+	std::string name;
+	std::stringstream ssName;
+	FILE * pFile;
+	ssName << roomNum << ".txt";
+	name = ssName.str();
+	pFile = fopen (name.c_str(),"w");
+	if (pFile!=NULL){
+		for (unsigned int i = 0; i < roomList[roomNum].size(); ++i){
+			std::stringstream ssString;
+			ssString << roomList[roomNum][i] << "\n";
+			fputs((ssString.str()).c_str(),pFile);			
+		}
+		fclose (pFile);
+	}
+}
+//Extract the text from a txt file
+void readRoomText(int roomNum){
+	std::string name;
+	std::stringstream ssName;
+	FILE * pFile;
+	ssName << roomNum << ".txt";
+	name = ssName.str();
+	pFile = fopen (name.c_str(),"r");
+	if (pFile!=NULL){
+		char c;
+		do{
+			std::vector<std::string> requestSplit;
+			std::string line="";
+			do{
+				c = fgetc(pFile);
+				if(c != EOF && c != '\n'){
+					std::stringstream ss;
+					ss << line << c;
+					line = ss.str();
+				}
+			}while(c != EOF && c != '\n');
+			roomList[roomNum].push_back(line);
+		} while(c != EOF);
+		fclose (pFile);
+	}
+}
 //Request recovery and transformation into string
 std::string readToString(unsigned  int sock){
     char buffer[1024] = {0};
@@ -99,8 +142,28 @@ void newSocket(int new_socket){
 		}
 	}
 }
+//Backup of different servers on txt files
+void saveText(){
+	int prevtime=0;
+	while(true){
+    	std::time_t result = std::time(nullptr);
+		std::stringstream ss;
+		ss << result;
+		if(prevtime < atoi(ss.str().c_str())){
+			for (int i = 0; i < maxRoom; ++i){
+				saveRoomText(i);
+			}
+    		std::time_t result2 = std::time(nullptr);
+			std::stringstream ss2;
+			ss2 << result2;
+			prevtime=atoi(ss2.str().c_str())+30;
+		}
+	}
+}
 //Thread management
 void addTread(){
+	std::vector<std::thread> threads;
+	threads.emplace_back(saveText);
 	while(true){
 		while (playeur+5>=threadCount){
 			int clientSocket = accept(server_fd, (struct sockaddr *)&address,(socklen_t*)&addrlen);
@@ -146,6 +209,7 @@ void paramServ(){
 }
 int main(int argc, char const *argv[]){
 	for (int i = 0; i < maxRoom; ++i){
+		readRoomText(i);
 		if(roomList[i].size()==0){
 			std::stringstream ss;
 			ss << "Server : Hello room " << i << ".";
