@@ -1,4 +1,5 @@
-//g++ -Wall -g  -c chat.cpp -o chat.o
+//g++ -g -Wall chat.cpp -o chat
+
 #include <arpa/inet.h>	//sockaddr_in et htons
 #include <termios.h> 	//oldt, termios, ICANON, TCSANOW, tcgetattr, ECHO
 #include <unistd.h> 	//read et STDIN_FILENO
@@ -8,13 +9,14 @@
 #include <cstring>		//memset
 #include <sstream> 		//stringstream
 #include <cerrno>		//errno et EINTR
+#include <vector> 		//element vector
 #include <map> 			//element map
-//#include <sys/socket.h>
-//#include <sys/types.h>
-//#include <sys/time.h>
-//#include <stdio.h>
-//#include <string>
-//#include <ctime>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <stdio.h>
+#include <string>
+#include <ctime>
 
 void my_sleep(unsigned msec) {
 	struct timespec req, rem;
@@ -47,6 +49,7 @@ void changemode(int dir){
   else
     tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 }
+//kbhit version linux
 int kbhit (void){
   struct timeval tv;
   fd_set rdfs;
@@ -60,15 +63,16 @@ int kbhit (void){
   select(STDIN_FILENO+1, &rdfs, NULL, NULL, &tv);
   return FD_ISSET(STDIN_FILENO, &rdfs);
 }
+//Verification and socket creation
 bool checkSocket(unsigned int *sock){
     int errorCount=0;
   	while(true){
 		if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 		{
-			printf("Socket creation error \n");
+			printf("Erreur de création de Socket.\n");
 			errorCount++;
 			if(errorCount > 100){
-				printf("Too much try.\n");
+				printf("Trop d'essai.\n");
 				return false;
 			}
 		}else{
@@ -76,40 +80,43 @@ bool checkSocket(unsigned int *sock){
 		}
 	}
 }
+//Management and initialization of the connection
 bool checkServer(std::string *ip,struct sockaddr_in *serv_addr,unsigned int *port,unsigned int sock,bool ipvalid){
     int errorCount=0;
   	while(true){
   		if(ipvalid){
-			printf("entrer votre ip:");
+			printf("Entrer l'IP de votre serveur:");
 			std::cin >> (*ip);
 		}
 		memset(&*serv_addr, '0', sizeof(*serv_addr));
 
 		(*serv_addr).sin_family = AF_INET;
 		(*serv_addr).sin_port = htons(*port);
-		//connection server
+		//server connection
 		if(inet_pton(AF_INET, (*ip).c_str(), &(*serv_addr).sin_addr)<=0)
 		{
-			printf("Invalid address(%s:%d)/ Address not supported \n",(*ip).c_str() ,*port);
+			printf("Adresse invalide(%s:%d)/ Adresse non prise en charge \n",(*ip).c_str() ,*port);
 			errorCount++;
 		}else{
 			if (connect(sock, (struct sockaddr *)&*serv_addr, sizeof(*serv_addr)) < 0)
 			{
-				printf("Connection Failed \n");
+				printf("La connexion a échoué.\n");
 				errorCount++;
 			}else{
 				return true;
 			}
 		}
 		if(errorCount > 100){
-			printf("Too much try.\n");
+			printf("Trop d'essai.\n");
 			return false;
 		}
     }
 }
-bool checkDispPseudo(std::string *pseudo,unsigned  int sock){
+//sending the nickname to the server and save nickname
+bool checkPseudo(std::string *pseudo,unsigned  int sock){
     signed int valRead;
     unsigned int minSizepseudo=5;
+    std::string comPseu="70";  
     char buffer[1024] = {0};
     int errorCount=0;
   	while(true){
@@ -118,12 +125,12 @@ bool checkDispPseudo(std::string *pseudo,unsigned  int sock){
 			printf("Entrer votre pseudo:\n");
 			std::cin >> (*pseudo);
 	  		if((*pseudo).length()<minSizepseudo){
-				printf("Votre pseudo est trop cour (%d caractère minimum)\n",minSizepseudo);
+				printf("Votre pseudo est trop cour (%d caractère minimum).\n",minSizepseudo);
 	  		}
 			std::stringstream ss;
-			ss << "70" << (*pseudo);
+			ss << comPseu << "&" << (*pseudo) << "&";
 			std::string tmp = ss.str();
-			if(!(*pseudo).length()<minSizepseudo){
+			if((*pseudo).length()>minSizepseudo){
     			send(sock , tmp.c_str() , tmp.length() , 0 );
 			}
 	  	}
@@ -132,19 +139,20 @@ bool checkDispPseudo(std::string *pseudo,unsigned  int sock){
     		if(buffer[0]!='1'){
     			errorCount++;
     			if(errorCount%100==0){
-	    			printf("pseudo reffusé\n");
+	    			printf("Votre pseudo est refusé.\n");
 	    			tmp="";
 	    			if(errorCount>10000){
+						printf("Trop d'essai.\n");
 	    				return false;
 	    			}
     			}
     		}else{
-    			printf("pseudo ajouté\n");
     			return true;
     		}
     	}
     }
 }
+//Request recovery and transformation into string
 std::string readToString(unsigned  int sock){
     char buffer[1024] = {0};
     signed int valRead;
@@ -162,62 +170,61 @@ std::string readToString(unsigned  int sock){
 		}
 	}
 }
+//Display the menu
 void printMenu(int roomNumber,std::map <int, int> roomList,std::string ip){
-	printf("\t\t\tServeur %s\n",ip.c_str());
-	printf("0 . Quit\n");
+	printf("\t\t\tServeur n°%s\n",ip.c_str());
+	printf("0 . Quitter le programme\n");
 	for (int i = 0; i < roomNumber; ++i){
-		printf("%d . %d\t",i+1,roomList[i]);
+		printf("%d . Salle %d\t",i+1,roomList[i]);
 		if(i!=0&&i%4==0)
 			printf("\n");
 	}
 }
 void clearIn(){while ( getchar() != '\n' );}
+//room management
 int roomGest(std::string menuInfo,std::map <int, int> *roomList){
-	char numstr[4];
-	int prevNum=1;
-	int prev=0;
-	for (int i = 1; i < menuInfo.length(); i++){
-		if((menuInfo.c_str())[i]=='&'||i+1== menuInfo.length()){
-			(*roomList)[prev] = atoi(numstr);
-			prevNum=i+1;
-			prev++;
-		}else{
-			numstr[i-prevNum]=(menuInfo.c_str())[i];
-		}
+	std::vector<std::string> tab;
+	char *str;
+	str = const_cast<char *>(menuInfo.c_str());
+	char * pch;
+	pch = strtok (str,"&");
+	while (pch != NULL){
+		std::string tmp = pch;
+		tab.push_back(tmp);
+		pch = strtok (NULL, "&");
 	}
-	return prev;
+	for (int i = 0; i < atoi(tab[1].c_str()); i++){
+		(*roomList)[i]=i;
+	}
+	return atoi(tab[1].c_str());
 }
 
 int main(int argc, char const *argv[]){
     struct sockaddr_in serv_addr;
 	std::map <int, int> roomList;
 	std::string previousHist="";
-	std::string menuInfo="08001&8002&8003&8004";
+	std::string menuInfo="";
     std::string pseudo="";
-    std::string msg="Hello from client";
-	std::string Hist="//si startport!= port\n/\n/\n/\n/\n/\n/\n/\n//|attendr\n/\n//|attendr\n/\n//|attendr\n/\n//|attendr\n/\n//|attendr\n/\n//|attendr\n/\n//|attendr\n/\n//|attendr\n/\n//|attendre q//|attendre q//|attendre q//|attendre q//|attendre que le pseudo soit ajouté	attendre une requette type 1&p|attendre que le pseudo soit ajouté	attendre une requette type 1&pseudo\n//|affichage serv /info/input			faire une requette 0 pour la liste et 1 pour les info du serv reponse type 2&... sauvegarde des room dans un tableau\n//finsi						\n//|entrer room	\n// |ecrire message(si press enter arreter affichage et faire un cin)\n// |changer room(press echap)\n";
-    std::string comInfo="71";
+    std::string msg="";
+	std::string Hist="";
+    std::string comInfo="71&";
     std::string comMess="50";
+    std::string comSend="51";
     std::string ip="";
-    unsigned int minSizepseudo=5;
     unsigned int port = 8001;
-    unsigned int oriPort = 8001;
+    unsigned int chanel = 0;
     unsigned int sock = 0;
     bool checkMenuQuit = false;
-    bool checkServ = false;
-    bool checkSock = false;
     bool checkQuit = false;
     bool checksend = false;
-    int errorCount=0;
 	int roomNumber=0;
-  	int input=-1;
     if(!checkSocket(&sock)){
     	return -1;
     }
     if(!checkServer(&ip,&serv_addr,&port,sock,true)){
     	return -1;
     }
-	if(!checkDispPseudo(&pseudo,sock)){
+	if(!checkPseudo(&pseudo,sock)){
     	return -1;
     }
 	while(true){
@@ -230,27 +237,21 @@ int main(int argc, char const *argv[]){
 		while(!checkMenuQuit){
 			system("clear");
 			printMenu(roomNumber,roomList,ip);
-			printf("\nEntrer votre choix:\n");
+			printf("\nEntrez votre choix:\n");
 			std::cin >> msg;
 			if(msg.compare("0")==0){
 				return -1;
 			}
-			for (int i = 0; i < roomNumber; ++i){
-				std::stringstream ss;
-				ss << i+1;
-				std::string test = ss.str();
-				if(msg.compare(test)==0){
-					port=roomList[i+1];
-					checkMenuQuit=true;
-					break;
-				}
+			int intMsg = atoi(msg.c_str())-1;
+			if(0 <= intMsg && intMsg <= roomNumber){
+				chanel=roomList[intMsg];
+				checkMenuQuit=true;
+				break;
 			}
 			msg="";
 			clearIn();
 		}
-	    if(!checkServer(&ip,&serv_addr,&port,sock,false)){
-	    	return -1;
-	    }
+		checksend=true;
 		while(!checkQuit){
 			changemode(1);
 			while(!kbhit()){
@@ -258,10 +259,12 @@ int main(int argc, char const *argv[]){
 					system("clear");
 					std::cout << Hist;
 					previousHist = Hist;
-					printf("press :\techat(quit)\tenter(whrite)\n");
+					printf("\tAppuyez sur échap pour quitter et sur Enter pour écrire.\n");
 					checksend=false;
 				}
-			    send(sock , comMess.c_str() , comMess.length() , 0 );
+				std::stringstream ss;
+				ss << comMess << "&" << chanel << "&";
+			    send(sock , (ss.str()).c_str() , (ss.str()).length() , 0 );
 			    Hist = readToString(sock);
 				my_sleep(400);
 			}
@@ -273,19 +276,15 @@ int main(int argc, char const *argv[]){
 				printf("Entrer votre text:\n");
 				std::cin >> msg;
 				std::stringstream ss;
-				ss << "1" << pseudo << "&" << msg.c_str();
+				ss << comSend << "&" << chanel << "&" <<pseudo << "&" << msg.c_str() << "&";
 				msg = ss.str();
 				send(sock , msg.c_str() , msg.length() , 0 );
 			}else if(27==ch){//esc
-				printf("Press enter to exit\n");
+				printf("Appuyez sur Entrée.\n");
 				checkQuit=true;
 			}
-				clearIn();
+			clearIn();
 		}
-		port=oriPort;
-	    if(!checkServer(&ip,&serv_addr,&port,sock,true)){
-	    	return -1;
-	    }
 	}
     return 0;
 }
