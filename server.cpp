@@ -35,7 +35,7 @@ void saveRoomText(int roomNum){
 	if (pFile!=NULL){
 		for (unsigned int i = 0; i < roomList[roomNum].size(); ++i){
 			std::stringstream ssString;
-			ssString << roomList[roomNum][i] << "\n";
+			ssString << roomList[roomNum][i] << (i+1 < roomList[roomNum].size()?"\n":"");
 			fputs((ssString.str()).c_str(),pFile);			
 		}
 		fclose (pFile);
