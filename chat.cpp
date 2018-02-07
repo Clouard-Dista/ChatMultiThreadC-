@@ -50,6 +50,7 @@ void changemode(int dir){
     tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 }
 //kbhit version linux
+void clearIn(){while ( getchar() != '\n' );}
 int kbhit (void){
   struct timeval tv;
   fd_set rdfs;
@@ -121,11 +122,11 @@ bool checkPseudo(std::string *pseudo,unsigned  int sock){
     int errorCount=0;
   	while(true){
 		std::string tmp;
-	  	while((*pseudo).length()<minSizepseudo){
+	  	while((*pseudo).length()<=minSizepseudo){
 			printf("Entrer votre pseudo:\n");
 			std::cin >> (*pseudo);
-	  		if((*pseudo).length()<minSizepseudo){
-				printf("Votre pseudo est trop cour (%d caractère minimum).\n",minSizepseudo);
+	  		if((*pseudo).length()<=minSizepseudo){
+				printf("Votre pseudo est trop cour (%d caractère minimum).\n",minSizepseudo+1);
 	  		}
 			std::stringstream ss;
 			ss << comPseu << "&" << (*pseudo) << "&";
@@ -180,7 +181,6 @@ void printMenu(int roomNumber,std::map <int, int> roomList,std::string ip){
 			printf("\n");
 	}
 }
-void clearIn(){while ( getchar() != '\n' );}
 //room management
 int roomGest(std::string menuInfo,std::map <int, int> *roomList){
 	std::vector<std::string> tab;
@@ -271,19 +271,21 @@ int main(int argc, char const *argv[]){
 			int ch;
 			ch=getchar();
 			changemode(0);
-			if(10==ch){//enter
-				checksend=true;
-				printf("Entrer votre text:\n");
-				std::cin >> msg;
-				std::stringstream ss;
-				ss << comSend << "&" << chanel << "&" <<pseudo << "&" << msg.c_str() << "&";
-				msg = ss.str();
-				send(sock , msg.c_str() , msg.length() , 0 );
-			}else if(27==ch){//esc
+			clearIn();
+			if(27==ch){//esc
 				printf("Appuyez sur Entrée.\n");
 				checkQuit=true;
+			}else if(10==ch){//enter
+				checksend=true;
+				printf("Entrer votre text:\n");
+				getline(std::cin, msg);
+				if(msg.length()>0){
+					std::stringstream ss;
+					ss << comSend << "&" << chanel << "&" <<pseudo << "&" << msg.c_str() << "&";
+					msg = ss.str();
+					send(sock , msg.c_str() , msg.length() , 0 );
+				}
 			}
-			clearIn();
 		}
 	}
     return 0;
