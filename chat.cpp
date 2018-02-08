@@ -135,8 +135,8 @@ bool checkPseudo(std::string *pseudo,unsigned  int sock){
     			send(sock , tmp.c_str() , tmp.length() , 0 );
 			}
 	  	}
-    	valRead = read( sock , buffer,1337);
-    	if(valRead != 1337){
+    	valRead = read( sock , buffer,1024);
+    	if(valRead != 1024){
     		if(buffer[0]!='1'){
     			errorCount++;
     			if(errorCount%100==0){
@@ -243,7 +243,7 @@ int main(int argc, char const *argv[]){
 				return -1;
 			}
 			int intMsg = atoi(msg.c_str())-1;
-			if(0 <= intMsg && intMsg <= roomNumber){
+			if(0 < intMsg && intMsg <= roomNumber){
 				chanel=roomList[intMsg];
 				checkMenuQuit=true;
 				break;

@@ -106,8 +106,7 @@ void newSocket(int new_socket){
     std::string comInfo="71";
     std::string comMess="50";
     std::string comSend="51";
-    std::string msghello = "";
-	while(true){
+   	while(true){
 	    std::string msgRead = readToString(new_socket);
 		std::vector<std::string> split = splitRequest(msgRead);
 	    if(msgRead.length()==0){
